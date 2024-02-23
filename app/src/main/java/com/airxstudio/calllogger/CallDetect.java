@@ -36,7 +36,6 @@ public class CallDetect extends BroadcastReceiver {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE)
                         != PackageManager.PERMISSION_GRANTED) {
-            // Permission is not granted, handle accordingly or request permission
             Log.d("CallLogReceiver", "READ_PHONE_STATE permission not granted");
             return;
         }
@@ -51,7 +50,6 @@ public class CallDetect extends BroadcastReceiver {
 
 
                 if (phoneState != null && !phoneState.equals(lastPhoneState)) {
-                    // Only log when the phone state changes
                     lastPhoneState = phoneState;
 
                     if (phoneState.equals(TelephonyManager.EXTRA_STATE_RINGING)) {
@@ -68,10 +66,8 @@ public class CallDetect extends BroadcastReceiver {
                         long ringDuration = callRingingTime == 0 ? 0 : (callEndTime - callRingingTime);
                         long callDuration = callStartTime == 0 ? 0 : (callEndTime - callStartTime);
 
-                        // Log the details
                         logCallDetails(phoneNumber, ringDuration, callDuration, context);
 
-                        // Reset variables for the next call
                         phoneNumber = "";
                         callRingingTime = 0;
                         callStartTime = 0;
@@ -149,7 +145,6 @@ public class CallDetect extends BroadcastReceiver {
 
         RequestQueue queue = Volley.newRequestQueue(context);
         queue.add(stringRequest);
-        // You can further process the call details as needed (e.g., store in a database, send to a server, etc.)
     }
 
     private String getDevicePhoneNumber(Context context) {

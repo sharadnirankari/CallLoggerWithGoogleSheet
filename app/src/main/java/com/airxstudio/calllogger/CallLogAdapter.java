@@ -32,7 +32,6 @@ public class CallLogAdapter extends RecyclerView.Adapter<CallLogAdapter.ViewHold
         CallLogModel callLog = callLogs.get(position);
         long milliseconds = Long.parseLong(callLog.getDate()); // Current time in milliseconds
 
-        // Create a SimpleDateFormat object with the desired date format
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         Date resultDate = new Date(milliseconds);
         String formattedDate = sdf.format(resultDate);
