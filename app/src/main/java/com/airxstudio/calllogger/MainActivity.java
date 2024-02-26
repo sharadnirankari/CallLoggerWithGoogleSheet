@@ -3,22 +3,31 @@ package com.airxstudio.calllogger;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.Manifest;
+import android.app.ActivityManager;
+import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.CallLog;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import com.android.volley.Request;
@@ -27,6 +36,11 @@ import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.MultiplePermissionsReport;
 import com.karumi.dexter.PermissionToken;
@@ -34,103 +48,64 @@ import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private CallLogAdapter adapter;
+    private FirebaseRemoteConfig mFirebaseRemoteConfig;
 
-    ActivityResultLauncher<String[]> mPermissionResultLauncher;
-    private boolean isReadPermissionGranted = false;
-    private boolean isLocationPermissionGranted = false;
-    private boolean isRecordPermissionGranted = false;
-
+    private PackageInfo pInfo;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        recyclerView = findViewById(R.id.recyclerView);
+        Intent serviceIntent = new Intent(this, MyForegroundService.class);
+        HashMap<String, Object> defaultsRate = new HashMap<>();
+        defaultsRate.put("new_version_code", String.valueOf(getVersionCode()));
 
-        mPermissionResultLauncher = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), new ActivityResultCallback<Map<String, Boolean>>() {
+        mFirebaseRemoteConfig = FirebaseRemoteConfig.getInstance();
+        FirebaseRemoteConfigSettings configSettings = new FirebaseRemoteConfigSettings.Builder()
+                .setMinimumFetchIntervalInSeconds(10) // change to 3600 on published app
+                .build();
+
+        mFirebaseRemoteConfig.setConfigSettingsAsync(configSettings);
+        mFirebaseRemoteConfig.setDefaultsAsync(defaultsRate);
+
+        mFirebaseRemoteConfig.fetchAndActivate().addOnCompleteListener(this, new OnCompleteListener<Boolean>() {
             @Override
-            public void onActivityResult(Map<String, Boolean> result) {
+            public void onComplete(@NonNull Task<Boolean> task) {
+                if (task.isSuccessful()) {
+                    final String new_version_code = mFirebaseRemoteConfig.getString("new_version_code");
 
-                if (result.get(Manifest.permission.READ_PHONE_STATE) != null) {
-                    isReadPermissionGranted = result.get(Manifest.permission.READ_PHONE_STATE);
-                }
-
-                if (result.get(Manifest.permission.READ_CALL_LOG) != null) {
-                    isLocationPermissionGranted = result.get(Manifest.permission.READ_CALL_LOG);
-                }
-
-                if (result.get(Manifest.permission.READ_PHONE_NUMBERS) != null) {
-                    isRecordPermissionGranted = result.get(Manifest.permission.READ_PHONE_NUMBERS);
-                }
-
-                if (result.get(Manifest.permission.READ_CONTACTS) != null) {
-                    isReadPermissionGranted = result.get(Manifest.permission.READ_CONTACTS);
-                }
+                    if (Integer.parseInt(new_version_code) > getVersionCode())
+                        showTheDialog("com.airxstudio.calllogger", new_version_code);
+                } else Log.e("MYLOG", "mFirebaseRemoteConfig.fetchAndActivate() NOT Successful");
 
             }
         });
-
-        requestPermission();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        }
+        foregroundServiceRunning();
+        recyclerView = findViewById(R.id.recyclerView);
 
 
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        if (isReadPermissionGranted) {
             List<CallLogModel> callLogs = getCallLogs();
             adapter = new CallLogAdapter(callLogs);
             recyclerView.setAdapter(adapter);
-        }
 
 
 
     }
 
-    private void requestPermission(){
-        isReadPermissionGranted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.READ_PHONE_STATE
-        ) == PackageManager.PERMISSION_GRANTED;
 
-        isLocationPermissionGranted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.READ_CALL_LOG
-        ) == PackageManager.PERMISSION_GRANTED;
-
-        isRecordPermissionGranted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.READ_PHONE_NUMBERS
-        ) == PackageManager.PERMISSION_GRANTED;
-
-        List<String> permissionRequest = new ArrayList<>();
-
-        if (!isReadPermissionGranted) {
-            permissionRequest.add(Manifest.permission.READ_PHONE_STATE);
-        }
-
-        if (!isLocationPermissionGranted) {
-            permissionRequest.add(Manifest.permission.READ_CALL_LOG);
-        }
-
-        if (!isRecordPermissionGranted) {
-            permissionRequest.add(Manifest.permission.READ_PHONE_NUMBERS);
-        }
-
-        if (!isReadPermissionGranted) {
-            permissionRequest.add(Manifest.permission.READ_CONTACTS);
-        }
-
-        if (!permissionRequest.isEmpty()) {
-            mPermissionResultLauncher.launch(permissionRequest.toArray(new String[0]));
-        }
-
-    }
     private List<CallLogModel> getCallLogs() {
         List<CallLogModel> callLogs = new ArrayList<>();
 
@@ -175,5 +150,47 @@ public class MainActivity extends AppCompatActivity {
             default:
                 return "Unknown";
         }
+    }
+    public boolean foregroundServiceRunning(){
+        ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        for(ActivityManager.RunningServiceInfo service: activityManager.getRunningServices(Integer.MAX_VALUE)) {
+            if(MyForegroundService.class.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    private void showTheDialog(final String appPackageName, String versionFromRemoteConfig) {
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Update")
+                .setMessage("Download latest version of CallLogger Costoso italiano, please update to version: " + versionFromRemoteConfig)
+                .setPositiveButton("UPDATE", null)
+                .show();
+
+        dialog.setCancelable(false);
+
+        Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        positiveButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW,
+                            Uri.parse("https://drive.google.com/drive/u/2/folders/1cHf9YY6trSDXnmBoLx0_-TkBlQPYOpGB")));
+                } catch (android.content.ActivityNotFoundException anfe) {
+                    startActivity(new Intent(Intent.ACTION_VIEW,
+                            Uri.parse("https://drive.google.com/drive/u/2/folders/1cHf9YY6trSDXnmBoLx0_-TkBlQPYOpGB")));
+                }
+            }
+        });
+    }
+
+    public int getVersionCode() {
+        pInfo = null;
+        try {
+            pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.i("MYLOG", "NameNotFoundException: " + e.getMessage());
+        }
+        return pInfo.versionCode;
     }
 }

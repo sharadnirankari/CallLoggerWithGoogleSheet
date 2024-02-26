@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "924999950883",
+    "project_id": "calllogger-9e30b",
+    "storage_bucket": "calllogger-9e30b.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:924999950883:android:01952f23419171d268c796",
+        "android_client_info": {
+          "package_name": "com.airxstudio.calllogger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-r9wNh8aDk2A39k3Hc_HeHC6DDfPFflQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
